@@ -12,6 +12,7 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Retry-After"],
 )
 
 EMAIL      = "23f2004473@ds.study.iitm.ac.in"
@@ -19,24 +20,25 @@ TOTAL      = 59   # T — your assigned total orders
 RATE_LIMIT = 17   # R — requests allowed per window
 WINDOW     = 10   # seconds
 
-# Pre-generate order catalog IDs 1..T
 ORDERS = [{"id": i, "item": f"item-{i}", "email": EMAIL} for i in range(1, TOTAL + 1)]
 
-# In-memory stores (ephemeral — fine for exam)
 idempotency_store: dict[str, dict] = {}
 rate_buckets: dict[str, list]      = defaultdict(list)
 
 
-def enforce_rate(client_id: str):
+def check_rate(client_id: str):
+    """Return a 429 JSONResponse with Retry-After if rate-limited, else None."""
     now = time.time()
     rate_buckets[client_id] = [t for t in rate_buckets[client_id] if now - t < WINDOW]
     if len(rate_buckets[client_id]) >= RATE_LIMIT:
-        raise HTTPException(
+        # Return JSONResponse directly — more reliable than HTTPException headers
+        return JSONResponse(
+            {"detail": "Rate limit exceeded"},
             status_code=429,
-            detail="Rate limit exceeded",
             headers={"Retry-After": str(WINDOW)},
         )
     rate_buckets[client_id].append(now)
+    return None
 
 
 @app.post("/orders", status_code=201)
@@ -45,16 +47,16 @@ async def create_order(
     idempotency_key: str = Header(None, alias="Idempotency-Key"),
     x_client_id: str     = Header("anonymous"),
 ):
-    enforce_rate(x_client_id)
+    rate_resp = check_rate(x_client_id)
+    if rate_resp is not None:
+        return rate_resp
 
     if not idempotency_key:
         raise HTTPException(status_code=400, detail="Idempotency-Key header required")
 
-    # Return cached response for duplicate keys
     if idempotency_key in idempotency_store:
         return JSONResponse(idempotency_store[idempotency_key], status_code=201)
 
-    # Create new order
     try:
         body = await request.json()
     except Exception:
@@ -71,7 +73,9 @@ async def list_orders(
     limit: int       = 5,
     x_client_id: str = Header("anonymous"),
 ):
-    enforce_rate(x_client_id)
+    rate_resp = check_rate(x_client_id)
+    if rate_resp is not None:
+        return rate_resp
 
     try:
         start = int(cursor)
@@ -82,7 +86,6 @@ async def list_orders(
     end   = min(start + limit, TOTAL)
     page  = ORDERS[start:end]
 
-    # None signals end-of-catalog to the grader
     next_cursor = str(end) if end < TOTAL else None
 
     return {
