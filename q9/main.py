@@ -67,15 +67,22 @@ async def create_order(
 
 @app.get("/orders")
 async def list_orders(
-    cursor: int      = 0,
+    cursor: str      = "0",
     limit: int       = 5,
     x_client_id: str = Header("anonymous"),
 ):
     enforce_rate(x_client_id)
 
-    start = int(cursor) % TOTAL
-    page  = [ORDERS[(start + i) % TOTAL] for i in range(limit)]
-    next_cursor = (start + limit) % TOTAL
+    try:
+        start = int(cursor)
+    except (ValueError, TypeError):
+        start = 0
+
+    start = max(0, min(start, TOTAL))
+    end   = min(start + limit, TOTAL)
+    page  = ORDERS[start:end]
+
+    next_cursor = str(end) if end < TOTAL else None
 
     return {
         "items":       page,
