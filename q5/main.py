@@ -14,7 +14,7 @@ app.add_middleware(
 )
 
 # --- YOUR ASSIGNED VALUES ---
-API_KEY = "ak_m2fqjgl4rykhbugoc2j4mhle"
+API_KEY = "ak_m2fqjgi4rykhbugoc2j4mh1e"
 EMAIL   = "23f2004473@ds.study.iitm.ac.in"
 # ----------------------------
 

@@ -66,13 +66,15 @@ async def effective_config(request: Request):
             if k in cfg:
                 cfg[k] = coerce(k, env_v)
 
-    # Layer 5: ?set-key=value query params (highest priority)
-    for param, val in request.query_params.items():
-        if param.startswith("set-"):
-            k = param[4:]
+    # Layer 5: ?set=key=value query params (highest priority)
+    # Format: ?set=port=9000&set=debug=true  (multiple "set" params allowed)
+    for val in request.query_params.getlist("set"):
+        if "=" in val:
+            k, v = val.split("=", 1)
+            k = k.strip()
             if k in cfg:
-                cfg[k] = coerce(k, val)
+                cfg[k] = coerce(k, v.strip())
 
     # Always mask api_key
-    cfg["api_key"] = "*****"
+    cfg["api_key"] = "****"
     return cfg

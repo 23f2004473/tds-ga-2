@@ -22,12 +22,12 @@ async def stack(request: Request, call_next):
     origin = request.headers.get("origin", "")
 
     # MW1: Request context — propagate or generate request_id
-    request_id = request.headers.get("X-Request-Id") or str(uuid.uuid4())
+    request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
     request.state.request_id = request_id
 
     # MW2: CORS preflight handling
     if request.method == "OPTIONS":
-        headers = {"X-Request-Id": request_id}
+        headers = {"X-Request-ID": request_id}
         if origin == ALLOWED_ORIGIN:
             headers.update({
                 "Access-Control-Allow-Origin":  ALLOWED_ORIGIN,
@@ -44,14 +44,14 @@ async def stack(request: Request, call_next):
         return JSONResponse(
             {"error": "Too many requests"},
             status_code=429,
-            headers={"Retry-After": str(WINDOW), "X-Request-Id": request_id},
+            headers={"Retry-After": str(WINDOW), "X-Request-ID": request_id},
         )
     rate_buckets[client_id].append(now)
 
     response = await call_next(request)
 
     # Always return request_id in response header
-    response.headers["X-Request-Id"] = request_id
+    response.headers["X-Request-ID"] = request_id
 
     # Attach ACAO header only for the allowed origin
     if origin == ALLOWED_ORIGIN:
